@@ -5,12 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sahilm/fuzzy"
 )
 
 // ErrAborted は Esc や Ctrl-C で選択を中断したときに返る。
@@ -97,7 +98,7 @@ type model struct {
 	items   []string
 	opts    Options
 	input   textinput.Model
-	matches fuzzy.Matches
+	matches []match
 
 	cursor   int // matches 内での位置
 	offset   int // 表示ウィンドウの先頭
@@ -211,14 +212,14 @@ func (m model) View() string {
 }
 
 // renderMatch はマッチした文字を強調して 1 行分を描画する。
-func renderMatch(match fuzzy.Match, isCursor bool) string {
-	matched := make(map[int]bool, len(match.MatchedIndexes))
-	for _, idx := range match.MatchedIndexes {
+func renderMatch(m match, isCursor bool) string {
+	matched := make(map[int]bool, len(m.MatchedIndexes))
+	for _, idx := range m.MatchedIndexes {
 		matched[idx] = true
 	}
 
 	var b strings.Builder
-	for i, r := range []rune(match.Str) {
+	for i, r := range []rune(m.Str) {
 		s := string(r)
 		switch {
 		case matched[i]:
@@ -239,16 +240,69 @@ func (m *model) filter() {
 	m.offset = 0
 }
 
-// matchItems はクエリで候補を絞り込む。空クエリなら元の順序のまま全件返す。
-func matchItems(items []string, query string) fuzzy.Matches {
-	if query == "" {
-		matches := make(fuzzy.Matches, len(items))
-		for i, item := range items {
-			matches[i] = fuzzy.Match{Str: item, Index: i}
-		}
-		return matches
+// match は絞り込みに残った候補 1 件を表す。
+type match struct {
+	Str            string
+	Index          int   // 元の items でのインデックス
+	MatchedIndexes []int // 強調表示する rune の位置
+}
+
+// matchItems は空白区切りの語をすべて含む候補だけを元の順序で返す。空クエリなら全件返す。
+func matchItems(items []string, query string) []match {
+	fields := strings.Fields(query)
+	words := make([][]rune, len(fields))
+	for i, field := range fields {
+		words[i] = foldRunes(field)
 	}
-	return fuzzy.Find(query, items)
+
+	matches := make([]match, 0, len(items))
+	for i, item := range items {
+		indexes, ok := matchWords(item, words)
+		if !ok {
+			continue
+		}
+		matches = append(matches, match{Str: item, Index: i, MatchedIndexes: indexes})
+	}
+	return matches
+}
+
+// matchWords は item がすべての語を含むかを判定し、含むなら一致した rune の位置を昇順で返す。
+func matchWords(item string, words [][]rune) ([]int, bool) {
+	runes := foldRunes(item)
+	hit := make([]bool, len(runes))
+
+	for _, word := range words {
+		found := false
+		for i := 0; i+len(word) <= len(runes); i++ {
+			if !slices.Equal(runes[i:i+len(word)], word) {
+				continue
+			}
+			found = true
+			for j := range word {
+				hit[i+j] = true
+			}
+		}
+		if !found {
+			return nil, false
+		}
+	}
+
+	var indexes []int
+	for i, ok := range hit {
+		if ok {
+			indexes = append(indexes, i)
+		}
+	}
+	return indexes, true
+}
+
+// foldRunes は rune 単位で小文字化する。strings.ToLower は rune 数が変わり得て強調位置がずれる。
+func foldRunes(s string) []rune {
+	runes := []rune(s)
+	for i, r := range runes {
+		runes[i] = unicode.ToLower(r)
+	}
+	return runes
 }
 
 func (m *model) moveCursor(delta int) {
