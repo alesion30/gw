@@ -2,6 +2,7 @@ package finder
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -175,6 +176,12 @@ func TestMatchItems(t *testing.T) {
 		{name: "empty query keeps every item", query: "", want: items},
 		{name: "partial match", query: "log", want: []string{"feat/login", "feat/logout"}},
 		{name: "no match", query: "zzz", want: nil},
+		// あいまい検索なら f-l-i の飛び飛び一致で feat/login が残るが、単語一致では落とす
+		{name: "non-contiguous characters do not match", query: "fli", want: nil},
+		{name: "case-insensitive query", query: "LOGIN", want: []string{"feat/login"}},
+		{name: "every word must appear", query: "feat log", want: []string{"feat/login", "feat/logout"}},
+		{name: "item missing one word is dropped", query: "feat crash", want: nil},
+		{name: "extra spaces are ignored", query: "  feat   out ", want: []string{"feat/logout"}},
 	}
 
 	for _, tt := range tests {
@@ -187,6 +194,57 @@ func TestMatchItems(t *testing.T) {
 				if match.Str != tt.want[i] {
 					t.Errorf("matches[%d] = %q, want %q", i, match.Str, tt.want[i])
 				}
+			}
+		})
+	}
+}
+
+func TestMatchItemsIgnoresItemCase(t *testing.T) {
+	mixed := []string{"Feat/Login", "MAIN"}
+
+	tests := []struct {
+		query string
+		want  string
+	}{
+		{query: "login", want: "Feat/Login"},
+		{query: "LoGiN", want: "Feat/Login"},
+		{query: "main", want: "MAIN"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			matches := matchItems(mixed, tt.query)
+			if len(matches) != 1 {
+				t.Fatalf("matchItems(%q) = %+v, want 1", tt.query, matches)
+			}
+			if matches[0].Str != tt.want {
+				t.Errorf("matchItems(%q) = %q, want %q", tt.query, matches[0].Str, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchItemsMarksEveryOccurrence(t *testing.T) {
+	tests := []struct {
+		name  string
+		item  string
+		query string
+		want  []int
+	}{
+		{name: "each occurrence of a word", item: "logo/login", query: "log", want: []int{0, 1, 2, 5, 6, 7}},
+		{name: "each word of the query", item: "feat/login", query: "feat in", want: []int{0, 1, 2, 3, 8, 9}},
+		{name: "rune positions instead of byte positions", item: "機能/ログイン", query: "ログ", want: []int{3, 4}},
+		{name: "nothing on an empty query", item: "feat/login", query: "", want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matches := matchItems([]string{tt.item}, tt.query)
+			if len(matches) != 1 {
+				t.Fatalf("matchItems() = %+v, want 1", matches)
+			}
+			if !slices.Equal(matches[0].MatchedIndexes, tt.want) {
+				t.Errorf("MatchedIndexes = %v, want %v", matches[0].MatchedIndexes, tt.want)
 			}
 		})
 	}
