@@ -249,3 +249,25 @@ func TestMatchItemsMarksEveryOccurrence(t *testing.T) {
 		})
 	}
 }
+
+func TestHasMatch(t *testing.T) {
+	tests := []struct {
+		name  string
+		items []string
+		query string
+		want  bool
+	}{
+		{name: "matching query", items: items, query: "log", want: true},
+		{name: "non-matching query", items: items, query: "zzz", want: false},
+		{name: "empty query keeps every item", items: items, query: "", want: true},
+		{name: "no items", items: nil, query: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasMatch(tt.items, tt.query); got != tt.want {
+				t.Errorf("HasMatch(%v, %q) = %v, want %v", tt.items, tt.query, got, tt.want)
+			}
+		})
+	}
+}
