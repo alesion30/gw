@@ -51,12 +51,13 @@ gw copy <file>...            メインの worktree からファイルをコピ�
 
 worktree 化していないローカルブランチから選んで worktree を作る。作成先は `<repo-root>/.worktrees/<branch>`。
 
-どのブランチにもマッチしない文字列を打ち込んだまま Enter を押すと、その名前で新しいブランチを作るか確認する。起点は `--base` で指定でき、省略するとカレントブランチになる。
+どのブランチにもマッチしない文字列を渡すと、絞り込み UI を出さずに、その名前で新しいブランチを作るか確認する。UI 上でマッチしない文字列を打ち込んだまま Enter を押したときも同じ。起点は `--base` で指定でき、省略するとカレントブランチになる。
 
 ```sh
-gw use              # 一覧から選ぶ
-gw use login        # login で絞り込んだ状態で開く
-gw use feat/new --base main
+gw use                       # 一覧から選ぶ
+gw use login                 # login で絞り込んだ状態で開く
+gw use feat/new              # どれにもマッチしないので、そのまま作成を確認する
+gw use feat/new --base main  # main を起点に作る
 ```
 
 ### gw remove --gone

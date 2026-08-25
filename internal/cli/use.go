@@ -24,7 +24,7 @@ func newUseCmd() *cobra.Command {
 		Use:   "use [query]",
 		Short: "Create a worktree for a branch",
 		Long: "Pick a local branch that has no worktree yet and create one for it.\n" +
-			"Confirming a query that matches nothing asks whether to create a branch with that name.\n" +
+			"A query that matches no branch skips the picker and asks whether to create a branch with that name.\n" +
 			"Worktrees are created under $GW_WORKTREE_DIR (default: <repo-root>/.worktrees).\n" +
 			"If ." + "gw-setup exists at the repository root, it runs inside the new worktree.",
 		Args: cobra.MaximumNArgs(1),
@@ -50,7 +50,8 @@ func runUse(e *env, query, base string) error {
 
 	branch, typed := "", query
 
-	if len(candidates) > 0 {
+	// 候補に 1 件もマッチしないクエリは新規ブランチを作る意図なので、Finder を挟まず作成確認へ進む
+	if finder.HasMatch(candidates, query) {
 		res, err := e.finder.Find(candidates, finder.Options{
 			Prompt:       "branch> ",
 			Query:        query,

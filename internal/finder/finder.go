@@ -247,6 +247,11 @@ type match struct {
 	MatchedIndexes []int // 強調表示する rune の位置
 }
 
+// HasMatch は Find と同じ絞り込み規則で、query が items のいずれかに一致するかを返す。
+func HasMatch(items []string, query string) bool {
+	return len(matchItems(items, query)) > 0
+}
+
 // matchItems は空白区切りの語をすべて含む候補だけを元の順序で返す。空クエリなら全件返す。
 func matchItems(items []string, query string) []match {
 	fields := strings.Fields(query)

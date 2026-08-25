@@ -39,8 +39,43 @@ func TestRunUseCreatesNewBranch(t *testing.T) {
 	}
 }
 
+func TestRunUseSkipsFinderForUnmatchedQuery(t *testing.T) {
+	root, e, fdr := newTestEnv(t)
+	runGit(t, root, "branch", "feat/login")
+
+	if err := runUse(e, "feat/new", ""); err != nil {
+		t.Fatalf("runUse() = %v", err)
+	}
+
+	// 候補が残っていても、マッチしないクエリでは選択 UI を出さずに作成へ進む
+	if fdr.items != nil {
+		t.Errorf("the finder was called with %v, want no call", fdr.items)
+	}
+	assertDirExists(t, filepath.Join(root, ".worktrees", "feat/new"))
+	if !e.git.BranchExists("feat/new") {
+		t.Error("the branch feat/new was not created")
+	}
+}
+
+func TestRunUseOpensFinderForMatchedQuery(t *testing.T) {
+	root, e, fdr := newTestEnv(t)
+	runGit(t, root, "branch", "feat/login")
+
+	fdr.result = finder.Result{Index: 0, Query: "login"}
+
+	if err := runUse(e, "login", ""); err != nil {
+		t.Fatalf("runUse() = %v", err)
+	}
+
+	if want := []string{"feat/login"}; !equal(fdr.items, want) {
+		t.Errorf("candidates = %v, want %v", fdr.items, want)
+	}
+	assertDirExists(t, filepath.Join(root, ".worktrees", "feat/login"))
+}
+
 func TestRunUseNewBranchDeclined(t *testing.T) {
 	root, e, _ := newTestEnv(t)
+	runGit(t, root, "branch", "feat/login")
 	e.confirm = func(string) bool { return false }
 
 	err := runUse(e, "feat/new", "")
@@ -48,10 +83,14 @@ func TestRunUseNewBranchDeclined(t *testing.T) {
 		t.Fatalf("runUse() = %v, want canceled", err)
 	}
 	assertNotExists(t, filepath.Join(root, ".worktrees", "feat/new"))
+	if e.git.BranchExists("feat/new") {
+		t.Error("the branch feat/new was created")
+	}
 }
 
 func TestRunUseNewBranchFromBase(t *testing.T) {
-	root, e, _ := newTestEnv(t)
+	root, e, fdr := newTestEnv(t)
+	runGit(t, root, "branch", "feat/login")
 
 	// main に 2 つ目のコミットを積み、1 つ目を起点に指定する
 	first := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
@@ -61,6 +100,10 @@ func TestRunUseNewBranchFromBase(t *testing.T) {
 
 	if err := runUse(e, "feat/base", first); err != nil {
 		t.Fatalf("runUse() = %v", err)
+	}
+
+	if fdr.items != nil {
+		t.Errorf("the finder was called with %v, want no call", fdr.items)
 	}
 
 	wt := filepath.Join(root, ".worktrees", "feat/base")
