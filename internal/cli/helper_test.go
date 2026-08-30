@@ -27,6 +27,11 @@ func (s *stubFinder) Find(items []string, _ finder.Options) (finder.Result, erro
 func newTestEnv(t *testing.T) (root string, e *env, fdr *stubFinder) {
 	t.Helper()
 
+	// ~/.gitconfig と system の設定を読ませない。hooksPath や push の既定値といった
+	// 手元の設定で結果が変わると、テストがマシンごとに落ちる
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+
 	root = resolve(t, t.TempDir())
 
 	runGit(t, root, "init", "-b", "main")
