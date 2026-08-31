@@ -110,3 +110,64 @@ func TestParseGoneBranches(t *testing.T) {
 		})
 	}
 }
+
+func TestParseRemoteBranches(t *testing.T) {
+	tests := []struct {
+		name   string
+		remote string
+		out    string
+		want   []RemoteBranch
+	}{
+		{
+			name:   "empty",
+			remote: "origin",
+			out:    "",
+			want:   nil,
+		},
+		{
+			name:   "branches",
+			remote: "origin",
+			out: "refs/remotes/origin/feature/foo \n" +
+				"refs/remotes/origin/main \n",
+			want: []RemoteBranch{
+				{Remote: "origin", Branch: "feature/foo"},
+				{Remote: "origin", Branch: "main"},
+			},
+		},
+		{
+			name:   "symbolic ref",
+			remote: "origin",
+			out: "refs/remotes/origin/HEAD refs/remotes/origin/main\n" +
+				"refs/remotes/origin/main \n",
+			want: []RemoteBranch{
+				{Remote: "origin", Branch: "main"},
+			},
+		},
+		{
+			name:   "another remote",
+			remote: "upstream",
+			out:    "refs/remotes/upstream/release/1.0 \n",
+			want: []RemoteBranch{
+				{Remote: "upstream", Branch: "release/1.0"},
+			},
+		},
+		{
+			name:   "prefix of another remote name",
+			remote: "origin",
+			out: "refs/remotes/origin2/main \n" +
+				"refs/remotes/origin/main \n",
+			want: []RemoteBranch{
+				{Remote: "origin", Branch: "main"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseRemoteBranches(tt.remote, tt.out)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseRemoteBranches() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}

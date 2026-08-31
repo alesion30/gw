@@ -51,11 +51,16 @@ gw copy <file>...            メインの worktree からファイルをコピ�
 
 worktree 化していないローカルブランチから選んで worktree を作る。作成先は `<repo-root>/.worktrees/<branch>`。
 
+取得済みのリモート追跡ブランチも `origin/feature/foo` の形で候補に並ぶ。選ぶとローカルブランチ `feature/foo` を作り、upstream に `origin/feature/foo` を張って `<repo-root>/.worktrees/feature/foo` に worktree を作る。リモートが複数あるときは `origin/feature/foo` と `upstream/feature/foo` のように別々の候補として出るので、どのリモートを追うかを選べる。
+
+候補に出るのは手元にあるリモート追跡ブランチだけで、`gw use` は fetch しない。リモートに増えたブランチを使いたいときは、先に `git fetch` する。同名のローカルブランチがすでにあるものと、`origin/HEAD` のようなシンボリック参照は候補から外れる。
+
 どのブランチにもマッチしない文字列を渡すと、絞り込み UI を出さずに、その名前で新しいブランチを作るか確認する。UI 上でマッチしない文字列を打ち込んだまま Enter を押したときも同じ。起点は `--base` で指定でき、省略するとカレントブランチになる。
 
 ```sh
 gw use                       # 一覧から選ぶ
 gw use login                 # login で絞り込んだ状態で開く
+gw use origin/feature/foo    # origin/feature/foo を追う feature/foo を作る
 gw use feat/new              # どれにもマッチしないので、そのまま作成を確認する
 gw use feat/new --base main  # main を起点に作る
 ```

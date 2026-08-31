@@ -150,6 +150,69 @@ func (c Client) LocalBranches() ([]string, error) {
 	return splitLines(out), nil
 }
 
+// RemoteBranch はローカルに取得済みのリモート追跡ブランチ 1 件を表す。
+type RemoteBranch struct {
+	Remote string // リモート名（例: origin）
+	Branch string // リモート名を除いたブランチ名（例: feature/foo）
+}
+
+// Name はリモート名で修飾した短縮名（例: origin/feature/foo）を返す。
+func (b RemoteBranch) Name() string {
+	return b.Remote + "/" + b.Branch
+}
+
+// Remotes は登録済みのリモート名を一覧で返す。
+func (c Client) Remotes() ([]string, error) {
+	out, err := c.Output("remote")
+	if err != nil {
+		return nil, err
+	}
+	return splitLines(out), nil
+}
+
+// RemoteBranches は手元に取得済みのリモート追跡ブランチを返す。fetch はしない。
+// リモートごとに引くのは、リモート名とブランチ名の境目を短縮名から推測せずに済ませるため。
+func (c Client) RemoteBranches() ([]RemoteBranch, error) {
+	remotes, err := c.Remotes()
+	if err != nil {
+		return nil, err
+	}
+
+	var branches []RemoteBranch
+	for _, remote := range remotes {
+		out, err := c.Output("for-each-ref", "--format=%(refname) %(symref)", remoteRefPrefix(remote))
+		if err != nil {
+			return nil, err
+		}
+		branches = append(branches, parseRemoteBranches(remote, out)...)
+	}
+	return branches, nil
+}
+
+func remoteRefPrefix(remote string) string {
+	return "refs/remotes/" + remote + "/"
+}
+
+// parseRemoteBranches は `git for-each-ref --format=%(refname) %(symref)` の出力を解析する。
+// symref が埋まっている行は origin/HEAD のようなシンボリック参照で、実体のブランチではないので外す。
+func parseRemoteBranches(remote, out string) []RemoteBranch {
+	prefix := remoteRefPrefix(remote)
+
+	var branches []RemoteBranch
+	for _, line := range splitLines(out) {
+		refname, symref, _ := strings.Cut(line, " ")
+		if strings.TrimSpace(symref) != "" {
+			continue
+		}
+		name, ok := strings.CutPrefix(refname, prefix)
+		if !ok || name == "" {
+			continue
+		}
+		branches = append(branches, RemoteBranch{Remote: remote, Branch: name})
+	}
+	return branches
+}
+
 // GoneBranches は upstream が消えた（gone）ローカルブランチを返す。
 func (c Client) GoneBranches() ([]string, error) {
 	out, err := c.Output("for-each-ref", "--format=%(refname:short) %(upstream:track)", "refs/heads")
@@ -184,6 +247,12 @@ func (c Client) FetchPrune() error {
 // AddWorktree は既存ブランチの worktree を作成する。
 func (c Client) AddWorktree(path, branch string) error {
 	return c.Run("worktree", "add", path, branch)
+}
+
+// AddWorktreeTracking はリモート追跡ブランチを起点にローカルブランチを作り、
+// upstream を張った worktree を作成する。
+func (c Client) AddWorktreeTracking(path, branch, upstream string) error {
+	return c.Run("worktree", "add", "--track", "-b", branch, path, upstream)
 }
 
 // AddWorktreeNewBranch は新規ブランチを作って worktree を作成する。
